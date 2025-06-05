@@ -1,45 +1,45 @@
 // =================================
-// 3.1 — GLOBAL VARIABLES & SETTINGS
+// GLOBAL VARIABLES & SETTINGS
 // =================================
 
-// Our full set of nodes: { id: { id, label, x, y, radius, parent, children, predecessor } }
+// All nodes stored as { id: { id, label, x, y, radius, parent, children, predecessor } }
 let nodes = {};
 
-// Track the last‐added node’s ID (for drawing arrows)
+// Tracks the last-added node’s ID (for drawing arrows)
 let lastAddedId = null;
 
-// Next ID to assign to a newly created node
+// Next integer ID to assign to a new node
 let nextNodeId = 1;
 
-// Currently selected node (null if none)
+// Currently selected node ID (null if none)
 let selectedNodeId = null;
 
-// Reference to our main <svg> element
+// Reference to the <svg> canvas element
 let svg = null;
 
-// Constants for layout / appearance:
-const DEFAULT_RADIUS = 40;      // Default radius of a new node
-const OFFSET_STEP = 60;         // Offset for successive root nodes
-const PARENT_PADDING = 20;      // Extra padding so parents enclose children
-const CHAR_WIDTH = 8;           // Approx. px per character for label width
-const LABEL_HEIGHT = 20;        // Label rectangle height
-const LABEL_GAP = 5;            // Gap between circle top and label
-const SIZE_STEP = 10;           // Amount (px) to increase/decrease radius
+// Appearance / layout constants
+const DEFAULT_RADIUS = 40;    // Radius for a fresh node
+const OFFSET_STEP = 60;       // Offset for successive root nodes
+const PARENT_PADDING = 20;    // Extra padding so parents enclose children
+const CHAR_WIDTH = 8;         // Approximate px per character for label width
+const LABEL_HEIGHT = 20;      // Label rectangle height
+const LABEL_GAP = 5;          // Gap between circle top and label
+const SIZE_STEP = 10;         // Amount (px) to increase/decrease radius
 
 
 
 // =================================
-// 3.2 — INITIALIZATION on load
+// INITIALIZATION on DOMContentLoaded
 // =================================
 
 window.addEventListener("DOMContentLoaded", () => {
-  // 1) Grab the <svg> element
+  // Grab the <svg> element once
   svg = document.getElementById("canvas");
 
-  // 2) Load saved state if present
+  // Load saved state from localStorage (if any)
   loadFromLocalStorage();
 
-  // 3) Hook up all buttons by ID
+  // Wire up all buttons by their IDs
   document.getElementById("add-node").addEventListener("click", onAddNewNode);
   document.getElementById("add-child").addEventListener("click", onAddChild);
   document.getElementById("add-parent").addEventListener("click", onAddParent);
@@ -48,16 +48,16 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("decrease-size").addEventListener("click", onDecreaseSize);
   document.getElementById("reset-map").addEventListener("click", onResetMap);
 
-  // 4) Define the arrowhead marker once
+  // Define the arrowhead marker inside <defs> once
   defineArrowheadMarker();
 
-  // 5) Render everything (so that any saved nodes appear)
+  // Initial render (draw any loaded nodes)
   renderAll();
 });
 
 
 // =================================
-// 3.3 — LOCAL STORAGE: SAVE & LOAD
+// LOCAL STORAGE: SAVE & LOAD
 // =================================
 
 function saveToLocalStorage() {
@@ -81,22 +81,20 @@ function loadFromLocalStorage() {
 
 
 // ==============================================
-// 3.4 — BUTTON HANDLER: Add a BRAND-NEW (ROOT) Node
+// BUTTON HANDLER: Add a BRAND-NEW (ROOT) Node
 // ==============================================
 
 function onAddNewNode() {
   const label = prompt("Enter a label for this new node:");
-  if (!label) return;
+  if (!label) return; // user cancelled or empty
 
-  // Determine placement:
+  // Decide placement: offset from last node, or default (150,150) if none exist
   let x, y;
   if (lastAddedId !== null && nodes[lastAddedId]) {
-    // Offset from the last-added node
     const prev = nodes[lastAddedId];
     x = prev.x + OFFSET_STEP;
     y = prev.y + OFFSET_STEP;
   } else {
-    // First node on a blank map
     x = 150;
     y = 150;
   }
@@ -122,7 +120,7 @@ function onAddNewNode() {
 
 
 // ====================================
-// 3.5 — BUTTON HANDLER: Add Child Node
+// BUTTON HANDLER: Add Child Node
 // ====================================
 
 function onAddChild() {
@@ -130,7 +128,6 @@ function onAddChild() {
     alert("Please click an existing node first to select it.");
     return;
   }
-
   const parentId = selectedNodeId;
   const label = prompt("Enter a label for the new child node:");
   if (!label) return;
@@ -138,7 +135,7 @@ function onAddChild() {
   const parent = nodes[parentId];
   const x = parent.x;
   const y = parent.y;
-  const radius = DEFAULT_RADIUS / 1.2;
+  const radius = DEFAULT_RADIUS * 0.8; // smaller than default
 
   const id = nextNodeId++;
   const predecessor = lastAddedId;
@@ -163,7 +160,7 @@ function onAddChild() {
 
 
 // =====================================
-// 3.6 — BUTTON HANDLER: Add Parent Node
+// BUTTON HANDLER: Add Parent Node
 // =====================================
 
 function onAddParent() {
@@ -171,7 +168,6 @@ function onAddParent() {
     alert("Please click an existing node first to select it.");
     return;
   }
-
   const childId = selectedNodeId;
   const label = prompt("Enter a label for the new parent node:");
   if (!label) return;
@@ -180,7 +176,7 @@ function onAddParent() {
   const predecessor = lastAddedId;
   const oldParent = nodes[childId].parent;
 
-  // Create new parent between oldParent and child
+  // Create new parent in between oldParent and child
   nodes[id] = {
     id,
     label,
@@ -192,10 +188,10 @@ function onAddParent() {
     predecessor: predecessor
   };
 
-  // Rewire child to point to new parent
+  // Rewire the child to point to new parent
   nodes[childId].parent = id;
 
-  // If an old parent existed, replace child with new parent in its children list
+  // If there was an old parent, replace childId with id in its children array
   if (oldParent !== null) {
     const siblings = nodes[oldParent].children;
     const idx = siblings.indexOf(childId);
@@ -204,7 +200,7 @@ function onAddParent() {
     }
   }
 
-  // Auto‐resize new parent so it fully encloses child
+  // Auto-resize the new parent so it encloses its child
   resizeParentToFitChildren(id);
 
   lastAddedId = id;
@@ -215,7 +211,7 @@ function onAddParent() {
 
 
 // ============================================
-// 3.7 — BUTTON HANDLER: Delete Selected Node
+// BUTTON HANDLER: Delete Selected Node & Subtree
 // ============================================
 
 function onDeleteNode() {
@@ -223,10 +219,10 @@ function onDeleteNode() {
     alert("Please click a node to select it before deleting.");
     return;
   }
-
+  // Collect subtree IDs to delete
   const toDelete = collectSubtree(selectedNodeId);
 
-  // If the deleted node had a parent, remove it from parent's children
+  // If deleted node had a parent, remove it from parent's children
   const parentId = nodes[selectedNodeId].parent;
   if (parentId !== null && nodes[parentId]) {
     const arr = nodes[parentId].children;
@@ -234,7 +230,7 @@ function onDeleteNode() {
     if (idx !== -1) arr.splice(idx, 1);
   }
 
-  // Delete all nodes in the subtree
+  // Delete each node in the subtree
   toDelete.forEach((nid) => {
     delete nodes[nid];
   });
@@ -251,7 +247,7 @@ function onDeleteNode() {
   renderAll();
 }
 
-// Recursively collect a node + all its descendants
+// Recursively collect a node and all its descendants
 function collectSubtree(rootId) {
   let result = [rootId];
   const children = nodes[rootId].children;
@@ -263,7 +259,7 @@ function collectSubtree(rootId) {
 
 
 // ================================================
-// 3.8 — BUTTON HANDLER: Increase Selected Node’s Size
+// BUTTON HANDLER: Increase Selected Node’s Size
 // ================================================
 
 function onIncreaseSize() {
@@ -271,12 +267,10 @@ function onIncreaseSize() {
     alert("Please click a node to select it, then click Increase Size.");
     return;
   }
-
   const node = nodes[selectedNodeId];
-  const newRadius = node.radius + SIZE_STEP;
-  node.radius = newRadius;
+  node.radius += SIZE_STEP;
 
-  // After manually resizing, ancestors may need to expand
+  // After resizing, ancestors might need to expand
   updateAncestors(selectedNodeId);
 
   saveToLocalStorage();
@@ -285,8 +279,8 @@ function onIncreaseSize() {
 
 
 // ================================================
-// 3.9 — BUTTON HANDLER: Decrease Selected Node’s Size
-// (but never below what’s needed to enclose children)
+// BUTTON HANDLER: Decrease Selected Node’s Size
+// (clamped so children remain inside)
 // ================================================
 
 function onDecreaseSize() {
@@ -294,14 +288,13 @@ function onDecreaseSize() {
     alert("Please click a node to select it, then click Decrease Size.");
     return;
   }
-
   const node = nodes[selectedNodeId];
   let newRadius = node.radius - SIZE_STEP;
   if (newRadius < 10) newRadius = 10; // absolute minimum
 
-  // If the node has children, compute the minimal radius so it still contains them
+  // If node has children, ensure newRadius is large enough to enclose them
   if (node.children.length > 0) {
-    // Compute bounding box of child circles
+    // Build bounding box of all child circles
     const boxes = node.children.map((cid) => {
       const c = nodes[cid];
       return {
@@ -322,7 +315,7 @@ function onDecreaseSize() {
     // Center of child bounding box
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    // Required radius to cover children
+    // Required radius to cover children + padding
     const halfWidth = (maxX - minX) / 2;
     const halfHeight = (maxY - minY) / 2;
     const required = Math.max(halfWidth, halfHeight);
@@ -332,14 +325,14 @@ function onDecreaseSize() {
       newRadius = minimal;
     }
 
-    // Re‐center the parent on its children
+    // Re-center the node on its children
     node.x = centerX;
     node.y = centerY;
   }
 
   node.radius = newRadius;
 
-  // After shrinking, ancestors might need to shrink (or might not)
+  // After shrinking, ancestors might need to shrink as well
   updateAncestors(selectedNodeId);
 
   saveToLocalStorage();
@@ -348,7 +341,7 @@ function onDecreaseSize() {
 
 
 // ====================================================
-// 3.10 — BUTTON HANDLER: Reset Map (clear everything)
+// BUTTON HANDLER: Reset Map (clear entire state)
 // ====================================================
 
 function onResetMap() {
@@ -366,7 +359,7 @@ function onResetMap() {
 
 
 // ====================================================
-// 3.11 — Define the Arrowhead Marker inside <defs>
+// Define the Arrowhead Marker inside <defs> once
 // ====================================================
 
 function defineArrowheadMarker() {
@@ -397,19 +390,19 @@ function defineArrowheadMarker() {
 
 
 // ================================================
-// 3.12 — MAIN RENDER LOOP: draw arrows then nodes
+// MAIN RENDER LOOP: draw arrows behind, then nodes
 // ================================================
 
 function renderAll() {
-  // 1) Clear out existing children of <svg>
+  // 1) Clear any existing children in <svg>
   while (svg.firstChild) {
     svg.removeChild(svg.firstChild);
   }
 
-  // 2) Re‐insert arrowhead <defs>
+  // 2) Re‐insert our <defs> for arrowheads
   defineArrowheadMarker();
 
-  // 3) Draw arrows behind all nodes
+  // 3) Draw arrows first (so they lie behind nodes)
   for (const id in nodes) {
     const node = nodes[id];
     if (node.predecessor !== null && nodes[node.predecessor]) {
@@ -417,7 +410,7 @@ function renderAll() {
     }
   }
 
-  // 4) Draw each node on top
+  // 4) Draw every node on top
   for (const id in nodes) {
     drawNode(nodes[id]);
   }
@@ -425,7 +418,7 @@ function renderAll() {
 
 
 // =====================================================
-// 3.13 — DRAW AN ARROW Between two nodes’ label rectangles
+// Draw an arrow from nodeA’s label center to nodeB’s label center
 // =====================================================
 
 function drawArrowBetween(nodeA, nodeB) {
@@ -448,15 +441,15 @@ function drawArrowBetween(nodeA, nodeB) {
 
 
 // ==================================================
-// 3.14 — DRAW A SINGLE NODE (circle + label + events)
+// Draw a single node: circle (transparent) + label
 // ==================================================
 
 function drawNode(node) {
-  // Create a <g> so circle & label move together
+  // Wrap circle + label in a <g> so dragging either moves both
   const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
   g.setAttribute("data-node-id", node.id);
 
-  // 1) Draw the circle
+  // 1) Draw the transparent circle with stroke
   const circle = document.createElementNS(
     "http://www.w3.org/2000/svg",
     "circle"
@@ -470,11 +463,11 @@ function drawNode(node) {
   }
   g.appendChild(circle);
 
-  // 2) Compute label rectangle metrics
+  // 2) Compute label rectangle coords/size
   const { x: rectX, y: rectY, width: rectW, height: rectH } =
     computeLabelRect(node);
 
-  // 3) Draw label background
+  // 3) Draw label background (white rectangle)
   const rectBG = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   rectBG.setAttribute("x", rectX);
   rectBG.setAttribute("y", rectY);
@@ -483,7 +476,7 @@ function drawNode(node) {
   rectBG.setAttribute("class", "node-label-rect");
   g.appendChild(rectBG);
 
-  // 4) Draw label text, centered
+  // 4) Draw label text, centered on top of rectangle
   const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
   text.setAttribute("x", node.x);
   text.setAttribute("y", rectY + rectH / 2);
@@ -499,7 +492,7 @@ function drawNode(node) {
     selectNode(node.id);
   });
 
-  // 6) Mousedown on <g> begins dragging
+  // 6) Mousedown on <g> begins drag operation
   g.addEventListener("mousedown", (e) => {
     e.stopPropagation();
     startDrag(e, node.id);
@@ -510,7 +503,7 @@ function drawNode(node) {
 
 
 // =======================================================
-// 3.15 — COMPUTE LABEL RECT (size & position) for a node
+// Compute the label rectangle’s position+size for a node
 // =======================================================
 
 function computeLabelRect(node) {
@@ -524,12 +517,12 @@ function computeLabelRect(node) {
 
 
 // ================================================
-// 3.16 — NODE SELECTION: highlight / unhighlight
+// Node selection: highlight (orange) or unhighlight
 // ================================================
 
 function selectNode(id) {
   if (selectedNodeId === id) {
-    selectedNodeId = null; // toggle off
+    selectedNodeId = null; // toggle off if already selected
   } else {
     selectedNodeId = id;
   }
@@ -538,7 +531,7 @@ function selectNode(id) {
 
 
 // ================================================
-// 3.17 — DRAGGING LOGIC (vanilla mouse events)
+// DRAGGING LOGIC (mouse events) for moving nodes
 // ================================================
 
 let dragNodeId = null;
@@ -549,7 +542,7 @@ function startDrag(e, nodeId) {
   dragNodeId = nodeId;
   const node = nodes[nodeId];
 
-  // Convert mouse (clientX, clientY) → SVG coords
+  // Convert mouse position → SVG coords
   const pt = svg.createSVGPoint();
   pt.x = e.clientX;
   pt.y = e.clientY;
@@ -574,7 +567,7 @@ function onDrag(e) {
   node.x = cursor.x - dragOffsetX;
   node.y = cursor.y - dragOffsetY;
 
-  // After moving, ancestors may need to adjust size
+  // After moving, ancestors may need to resize/shift
   updateAncestors(dragNodeId);
 
   renderAll();
@@ -591,7 +584,7 @@ function endDrag(e) {
 
 
 // =======================================================
-// 3.18 — UPDATE PARENT‐CHAIN: ensure parents enclose children
+// Ensure parents enclose all child circles (resize/center)
 // =======================================================
 
 function updateAncestors(childId) {
@@ -606,7 +599,7 @@ function resizeParentToFitChildren(parentId) {
   const parent = nodes[parentId];
   if (!parent || parent.children.length === 0) return;
 
-  // Build bounding box of all child circles
+  // Build bounding box around all child circles
   const boxes = parent.children.map((cid) => {
     const c = nodes[cid];
     return {
