@@ -37,14 +37,14 @@ html, body {
 }
 
 /* === Node styling === */
-/* Unselected circle: light blue fill, black stroke */
+/* Unselected circle: transparent fill, blue stroke */
 .node-circle {
-  fill: #cce5ff;
+  fill: transparent;         /* <-- Transparent now */
   stroke: #005cbf;
   stroke-width: 1.5px;
 }
 
-/* Selected circle: darker stroke */
+/* Selected circle: orange stroke, thicker */
 .node-circle.selected {
   stroke: #ff4500;
   stroke-width: 3px;
