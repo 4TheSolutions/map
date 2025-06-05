@@ -13,7 +13,7 @@ html, body {
   border-bottom: 1px solid #ccc;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 #controls button {
