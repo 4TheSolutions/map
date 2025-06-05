@@ -311,3 +311,199 @@ function drawArrowBetween(nodeA, nodeB) {
 
   const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line.setAttribute("x1", fromX);
+  line.setAttribute("y1", fromY);
+  line.setAttribute("x2", toX);
+  line.setAttribute("y2", toY);
+  line.setAttribute("class", "arrow-line");
+  svg.appendChild(line);
+}
+
+
+// ==================================================
+// 3.11 — DRAW A SINGLE NODE (circle + label + events)
+// ==================================================
+
+function drawNode(node) {
+  // Create a <g> so circle+label move together on drag
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.setAttribute("data-node-id", node.id);
+
+  // 1) Draw the circle (transparent fill, colored stroke)
+  const circle = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "circle"
+  );
+  circle.setAttribute("cx", node.x);
+  circle.setAttribute("cy", node.y);
+  circle.setAttribute("r", node.radius);
+  circle.setAttribute("class", "node-circle");
+  if (node.id === selectedNodeId) {
+    circle.classList.add("selected");
+  }
+  g.appendChild(circle);
+
+  // 2) Compute where the label rectangle goes
+  const { x: rectX, y: rectY, width: rectW, height: rectH } = computeLabelRect(node);
+
+  // 3) Draw label background
+  const rectBG = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rectBG.setAttribute("x", rectX);
+  rectBG.setAttribute("y", rectY);
+  rectBG.setAttribute("width", rectW);
+  rectBG.setAttribute("height", rectH);
+  rectBG.setAttribute("class", "node-label-rect");
+  g.appendChild(rectBG);
+
+  // 4) Draw label text, centered
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", node.x);
+  text.setAttribute("y", rectY + rectH / 2);
+  text.setAttribute("text-anchor", "middle");
+  text.setAttribute("dominant-baseline", "middle");
+  text.setAttribute("class", "node-label-text");
+  text.textContent = node.label;
+  g.appendChild(text);
+
+  // 5) Clicking this <g> selects/deselects the node
+  g.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selectNode(node.id);
+  });
+
+  // 6) Mousedown on the <g> begins a drag operation
+  g.addEventListener("mousedown", (e) => {
+    e.stopPropagation();
+    startDrag(e, node.id);
+  });
+
+  // 7) Append <g> into our main SVG
+  svg.appendChild(g);
+}
+
+
+// ==================================================
+// 3.12 — COMPUTE LABEL RECT (size + position) from node data
+// ==================================================
+
+function computeLabelRect(node) {
+  const textLen = node.label.length;
+  const width = textLen * CHAR_WIDTH + 20; // 20px horizontal padding
+  const height = LABEL_HEIGHT;              // fixed height
+  const x = node.x - width / 2;
+  const y = node.y - node.radius - height - LABEL_GAP;
+  return { x, y, width, height };
+}
+
+
+// ================================================
+// 3.13 — NODE SELECTION: highlight / unhighlight
+// ================================================
+
+function selectNode(id) {
+  if (selectedNodeId === id) {
+    selectedNodeId = null; // toggle off
+  } else {
+    selectedNodeId = id;
+  }
+  renderAll();
+}
+
+
+// ================================================
+// 3.14 — DRAGGING LOGIC (vanilla mouse events)
+// ================================================
+
+let dragNodeId = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+function startDrag(e, nodeId) {
+  dragNodeId = nodeId;
+  const node = nodes[nodeId];
+
+  // Convert mouse position (clientX/Y) → SVG coordinates
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+  dragOffsetX = cursor.x - node.x;
+  dragOffsetY = cursor.y - node.y;
+
+  window.addEventListener("mousemove", onDrag);
+  window.addEventListener("mouseup", endDrag);
+}
+
+function onDrag(e) {
+  if (dragNodeId === null) return;
+  const node = nodes[dragNodeId];
+
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+  node.x = cursor.x - dragOffsetX;
+  node.y = cursor.y - dragOffsetY;
+
+  // After moving a node, its ancestors might need to resize
+  updateAncestors(dragNodeId);
+
+  renderAll();
+}
+
+function endDrag(e) {
+  if (dragNodeId !== null) {
+    saveToLocalStorage();
+  }
+  dragNodeId = null;
+  window.removeEventListener("mousemove", onDrag);
+  window.removeEventListener("mouseup", endDrag);
+}
+
+
+// =======================================================
+// 3.15 — UPDATE PARENT‐CHAIN: ensure parents enclose children
+// =======================================================
+
+function updateAncestors(childId) {
+  let current = nodes[childId].parent;
+  while (current !== null) {
+    resizeParentToFitChildren(current);
+    current = nodes[current].parent;
+  }
+}
+
+function resizeParentToFitChildren(parentId) {
+  const parent = nodes[parentId];
+  if (!parent || parent.children.length === 0) return;
+
+  // Build a bounding box covering all child circles
+  const boxes = parent.children.map((cid) => {
+    const c = nodes[cid];
+    return {
+      minX: c.x - c.radius,
+      maxX: c.x + c.radius,
+      minY: c.y - c.radius,
+      maxY: c.y + c.radius
+    };
+  });
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  boxes.forEach((b) => {
+    if (b.minX < minX) minX = b.minX;
+    if (b.maxX > maxX) maxX = b.maxX;
+    if (b.minY < minY) minY = b.minY;
+    if (b.maxY > maxY) maxY = b.maxY;
+  });
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const halfWidth = (maxX - minX) / 2;
+  const halfHeight = (maxY - minY) / 2;
+  const requiredRadius = Math.max(halfWidth, halfHeight);
+
+  parent.x = centerX;
+  parent.y = centerY;
+  parent.radius = requiredRadius + PARENT_PADDING;
+}
