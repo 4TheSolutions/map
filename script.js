@@ -85,6 +85,7 @@ function loadFromLocalStorage() {
 // ==========================================
 
 function onAddNewNode() {
+  console.log("onAddNewNode fired");
   const label = prompt("Enter label for new node:");
   if (!label) return; // if user canceled or left blank
 
