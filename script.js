@@ -18,35 +18,40 @@ let selectedNodeId = null;
 let svg = null;
 
 // Constants for layout / appearance:
-const DEFAULT_RADIUS = 40;    // Default radius of a “fresh” node
-const OFFSET_STEP = 60;       // How far a new node is offset from the last one
-const PARENT_PADDING = 20;    // Extra padding so parents enclose children
-const CHAR_WIDTH = 8;         // Approx. px per character for label width
-const LABEL_HEIGHT = 20;      // Label rectangle height
-const LABEL_GAP = 5;          // Gap between circle top and label
+const DEFAULT_RADIUS = 40;      // Default radius of a new node
+const OFFSET_STEP = 60;         // Offset for successive root nodes
+const PARENT_PADDING = 20;      // Extra padding so parents enclose children
+const CHAR_WIDTH = 8;           // Approx. px per character for label width
+const LABEL_HEIGHT = 20;        // Label rectangle height
+const LABEL_GAP = 5;            // Gap between circle top and label
+const SIZE_STEP = 10;           // Amount (px) to increase/decrease radius
+
 
 
 // =================================
-// 3.2 — INITIALIZATION on DOMContentLoaded
+// 3.2 — INITIALIZATION on load
 // =================================
 
 window.addEventListener("DOMContentLoaded", () => {
   // 1) Grab the <svg> element
   svg = document.getElementById("canvas");
 
-  // 2) Load saved state (if any) from localStorage
+  // 2) Load saved state if present
   loadFromLocalStorage();
 
-  // 3) Hook up the four buttons by ID
+  // 3) Hook up all buttons by ID
   document.getElementById("add-node").addEventListener("click", onAddNewNode);
   document.getElementById("add-child").addEventListener("click", onAddChild);
   document.getElementById("add-parent").addEventListener("click", onAddParent);
+  document.getElementById("delete-node").addEventListener("click", onDeleteNode);
+  document.getElementById("increase-size").addEventListener("click", onIncreaseSize);
+  document.getElementById("decrease-size").addEventListener("click", onDecreaseSize);
   document.getElementById("reset-map").addEventListener("click", onResetMap);
 
-  // 4) Define the arrowhead marker just once
+  // 4) Define the arrowhead marker once
   defineArrowheadMarker();
 
-  // 5) Initial render (draw any pre‐saved nodes)
+  // 5) Render everything (so that any saved nodes appear)
   renderAll();
 });
 
@@ -76,30 +81,28 @@ function loadFromLocalStorage() {
 
 
 // ==============================================
-// 3.4 — BUTTON HANDLER: Add a BRAND‐NEW (ROOT) Node
+// 3.4 — BUTTON HANDLER: Add a BRAND-NEW (ROOT) Node
 // ==============================================
 
 function onAddNewNode() {
   const label = prompt("Enter a label for this new node:");
-  if (!label) return; // user canceled or empty
+  if (!label) return;
 
-  // Decide where to place the new node:
-  // If there’s a previously added node, offset by OFFSET_STEP in both x and y.
-  // Otherwise, place at a default (150, 150).
+  // Determine placement:
   let x, y;
   if (lastAddedId !== null && nodes[lastAddedId]) {
+    // Offset from the last-added node
     const prev = nodes[lastAddedId];
     x = prev.x + OFFSET_STEP;
     y = prev.y + OFFSET_STEP;
   } else {
-    // First node (or if lastAddedId got removed somehow)
+    // First node on a blank map
     x = 150;
     y = 150;
   }
 
-  // Create the new node object
   const id = nextNodeId++;
-  const predecessor = lastAddedId; // for drawing the arrow
+  const predecessor = lastAddedId;
 
   nodes[id] = {
     id,
@@ -132,11 +135,10 @@ function onAddChild() {
   const label = prompt("Enter a label for the new child node:");
   if (!label) return;
 
-  // Create the child at the parent’s center (so you can drag it out after)
   const parent = nodes[parentId];
   const x = parent.x;
   const y = parent.y;
-  const radius = DEFAULT_RADIUS / 1.2; // slightly smaller
+  const radius = DEFAULT_RADIUS / 1.2;
 
   const id = nextNodeId++;
   const predecessor = lastAddedId;
@@ -152,9 +154,7 @@ function onAddChild() {
     predecessor: predecessor
   };
 
-  // Add child reference to parent
   parent.children.push(id);
-
   lastAddedId = id;
   updateAncestors(id);
   saveToLocalStorage();
@@ -180,7 +180,7 @@ function onAddParent() {
   const predecessor = lastAddedId;
   const oldParent = nodes[childId].parent;
 
-  // Create the new parent in between
+  // Create new parent between oldParent and child
   nodes[id] = {
     id,
     label,
@@ -192,10 +192,10 @@ function onAddParent() {
     predecessor: predecessor
   };
 
-  // Rewire the child to point to the new parent
+  // Rewire child to point to new parent
   nodes[childId].parent = id;
 
-  // If there was an old parent, replace childId with id in its children array
+  // If an old parent existed, replace child with new parent in its children list
   if (oldParent !== null) {
     const siblings = nodes[oldParent].children;
     const idx = siblings.indexOf(childId);
@@ -204,7 +204,7 @@ function onAddParent() {
     }
   }
 
-  // Auto‐resize the new parent so it encloses its child
+  // Auto‐resize new parent so it fully encloses child
   resizeParentToFitChildren(id);
 
   lastAddedId = id;
@@ -214,14 +214,145 @@ function onAddParent() {
 }
 
 
+// ============================================
+// 3.7 — BUTTON HANDLER: Delete Selected Node
+// ============================================
+
+function onDeleteNode() {
+  if (!selectedNodeId) {
+    alert("Please click a node to select it before deleting.");
+    return;
+  }
+
+  const toDelete = collectSubtree(selectedNodeId);
+
+  // If the deleted node had a parent, remove it from parent's children
+  const parentId = nodes[selectedNodeId].parent;
+  if (parentId !== null && nodes[parentId]) {
+    const arr = nodes[parentId].children;
+    const idx = arr.indexOf(selectedNodeId);
+    if (idx !== -1) arr.splice(idx, 1);
+  }
+
+  // Delete all nodes in the subtree
+  toDelete.forEach((nid) => {
+    delete nodes[nid];
+  });
+
+  // If lastAddedId was deleted, clear it
+  if (toDelete.includes(lastAddedId)) {
+    lastAddedId = null;
+  }
+
+  // Clear selection if it was deleted
+  selectedNodeId = null;
+
+  saveToLocalStorage();
+  renderAll();
+}
+
+// Recursively collect a node + all its descendants
+function collectSubtree(rootId) {
+  let result = [rootId];
+  const children = nodes[rootId].children;
+  children.forEach((cid) => {
+    result = result.concat(collectSubtree(cid));
+  });
+  return result;
+}
+
+
 // ================================================
-// 3.7 — BUTTON HANDLER: Reset Map (clear everything)
+// 3.8 — BUTTON HANDLER: Increase Selected Node’s Size
 // ================================================
 
+function onIncreaseSize() {
+  if (!selectedNodeId) {
+    alert("Please click a node to select it, then click Increase Size.");
+    return;
+  }
+
+  const node = nodes[selectedNodeId];
+  const newRadius = node.radius + SIZE_STEP;
+  node.radius = newRadius;
+
+  // After manually resizing, ancestors may need to expand
+  updateAncestors(selectedNodeId);
+
+  saveToLocalStorage();
+  renderAll();
+}
+
+
+// ================================================
+// 3.9 — BUTTON HANDLER: Decrease Selected Node’s Size
+// (but never below what’s needed to enclose children)
+// ================================================
+
+function onDecreaseSize() {
+  if (!selectedNodeId) {
+    alert("Please click a node to select it, then click Decrease Size.");
+    return;
+  }
+
+  const node = nodes[selectedNodeId];
+  let newRadius = node.radius - SIZE_STEP;
+  if (newRadius < 10) newRadius = 10; // absolute minimum
+
+  // If the node has children, compute the minimal radius so it still contains them
+  if (node.children.length > 0) {
+    // Compute bounding box of child circles
+    const boxes = node.children.map((cid) => {
+      const c = nodes[cid];
+      return {
+        minX: c.x - c.radius,
+        maxX: c.x + c.radius,
+        minY: c.y - c.radius,
+        maxY: c.y + c.radius
+      };
+    });
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    boxes.forEach((b) => {
+      if (b.minX < minX) minX = b.minX;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxY > maxY) maxY = b.maxY;
+    });
+
+    // Center of child bounding box
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    // Required radius to cover children
+    const halfWidth = (maxX - minX) / 2;
+    const halfHeight = (maxY - minY) / 2;
+    const required = Math.max(halfWidth, halfHeight);
+    const minimal = required + PARENT_PADDING;
+
+    if (newRadius < minimal) {
+      newRadius = minimal;
+    }
+
+    // Re‐center the parent on its children
+    node.x = centerX;
+    node.y = centerY;
+  }
+
+  node.radius = newRadius;
+
+  // After shrinking, ancestors might need to shrink (or might not)
+  updateAncestors(selectedNodeId);
+
+  saveToLocalStorage();
+  renderAll();
+}
+
+
+// ====================================================
+// 3.10 — BUTTON HANDLER: Reset Map (clear everything)
+// ====================================================
+
 function onResetMap() {
-  if (
-    confirm("This will erase your entire map. Are you sure?")
-  ) {
+  if (confirm("This will erase your entire map. Continue?")) {
     localStorage.removeItem("mindmap-nodes");
     localStorage.removeItem("mindmap-lastAddedId");
     localStorage.removeItem("mindmap-nextNodeId");
@@ -235,11 +366,10 @@ function onResetMap() {
 
 
 // ====================================================
-// 3.8 — Define the Arrowhead Marker inside <defs> once
+// 3.11 — Define the Arrowhead Marker inside <defs>
 // ====================================================
 
 function defineArrowheadMarker() {
-  // If we already added a <defs> section, skip adding again
   if (svg.querySelector("defs")) return;
 
   const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
@@ -266,12 +396,12 @@ function defineArrowheadMarker() {
 }
 
 
-// ===============================================
-// 3.9 — MAIN RENDER LOOP: draw arrows then draw nodes
-// ===============================================
+// ================================================
+// 3.12 — MAIN RENDER LOOP: draw arrows then nodes
+// ================================================
 
 function renderAll() {
-  // 1) Clear out existing SVG contents
+  // 1) Clear out existing children of <svg>
   while (svg.firstChild) {
     svg.removeChild(svg.firstChild);
   }
@@ -279,7 +409,7 @@ function renderAll() {
   // 2) Re‐insert arrowhead <defs>
   defineArrowheadMarker();
 
-  // 3) Draw arrows behind everything
+  // 3) Draw arrows behind all nodes
   for (const id in nodes) {
     const node = nodes[id];
     if (node.predecessor !== null && nodes[node.predecessor]) {
@@ -295,15 +425,13 @@ function renderAll() {
 
 
 // =====================================================
-// 3.10 — DRAW AN ARROW Between two nodes’ label rectangles
+// 3.13 — DRAW AN ARROW Between two nodes’ label rectangles
 // =====================================================
 
 function drawArrowBetween(nodeA, nodeB) {
-  // Compute each node’s label rectangle
   const rectA = computeLabelRect(nodeA);
   const rectB = computeLabelRect(nodeB);
 
-  // Arrow from center of rectA to center of rectB
   const fromX = rectA.x + rectA.width / 2;
   const fromY = rectA.y + rectA.height / 2;
   const toX = rectB.x + rectB.width / 2;
@@ -320,15 +448,15 @@ function drawArrowBetween(nodeA, nodeB) {
 
 
 // ==================================================
-// 3.11 — DRAW A SINGLE NODE (circle + label + events)
+// 3.14 — DRAW A SINGLE NODE (circle + label + events)
 // ==================================================
 
 function drawNode(node) {
-  // Create a <g> so circle+label move together on drag
+  // Create a <g> so circle & label move together
   const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
   g.setAttribute("data-node-id", node.id);
 
-  // 1) Draw the circle (transparent fill, colored stroke)
+  // 1) Draw the circle
   const circle = document.createElementNS(
     "http://www.w3.org/2000/svg",
     "circle"
@@ -342,8 +470,9 @@ function drawNode(node) {
   }
   g.appendChild(circle);
 
-  // 2) Compute where the label rectangle goes
-  const { x: rectX, y: rectY, width: rectW, height: rectH } = computeLabelRect(node);
+  // 2) Compute label rectangle metrics
+  const { x: rectX, y: rectY, width: rectW, height: rectH } =
+    computeLabelRect(node);
 
   // 3) Draw label background
   const rectBG = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -370,20 +499,19 @@ function drawNode(node) {
     selectNode(node.id);
   });
 
-  // 6) Mousedown on the <g> begins a drag operation
+  // 6) Mousedown on <g> begins dragging
   g.addEventListener("mousedown", (e) => {
     e.stopPropagation();
     startDrag(e, node.id);
   });
 
-  // 7) Append <g> into our main SVG
   svg.appendChild(g);
 }
 
 
-// ==================================================
-// 3.12 — COMPUTE LABEL RECT (size + position) from node data
-// ==================================================
+// =======================================================
+// 3.15 — COMPUTE LABEL RECT (size & position) for a node
+// =======================================================
 
 function computeLabelRect(node) {
   const textLen = node.label.length;
@@ -396,7 +524,7 @@ function computeLabelRect(node) {
 
 
 // ================================================
-// 3.13 — NODE SELECTION: highlight / unhighlight
+// 3.16 — NODE SELECTION: highlight / unhighlight
 // ================================================
 
 function selectNode(id) {
@@ -410,7 +538,7 @@ function selectNode(id) {
 
 
 // ================================================
-// 3.14 — DRAGGING LOGIC (vanilla mouse events)
+// 3.17 — DRAGGING LOGIC (vanilla mouse events)
 // ================================================
 
 let dragNodeId = null;
@@ -421,7 +549,7 @@ function startDrag(e, nodeId) {
   dragNodeId = nodeId;
   const node = nodes[nodeId];
 
-  // Convert mouse position (clientX/Y) → SVG coordinates
+  // Convert mouse (clientX, clientY) → SVG coords
   const pt = svg.createSVGPoint();
   pt.x = e.clientX;
   pt.y = e.clientY;
@@ -446,7 +574,7 @@ function onDrag(e) {
   node.x = cursor.x - dragOffsetX;
   node.y = cursor.y - dragOffsetY;
 
-  // After moving a node, its ancestors might need to resize
+  // After moving, ancestors may need to adjust size
   updateAncestors(dragNodeId);
 
   renderAll();
@@ -463,7 +591,7 @@ function endDrag(e) {
 
 
 // =======================================================
-// 3.15 — UPDATE PARENT‐CHAIN: ensure parents enclose children
+// 3.18 — UPDATE PARENT‐CHAIN: ensure parents enclose children
 // =======================================================
 
 function updateAncestors(childId) {
@@ -478,7 +606,7 @@ function resizeParentToFitChildren(parentId) {
   const parent = nodes[parentId];
   if (!parent || parent.children.length === 0) return;
 
-  // Build a bounding box covering all child circles
+  // Build bounding box of all child circles
   const boxes = parent.children.map((cid) => {
     const c = nodes[cid];
     return {
