@@ -1,0 +1,77 @@
+/* ====== Basic resets ====== */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: Arial, sans-serif;
+}
+
+/* Container for buttons/instructions */
+#controls {
+  background: #f0f0f0;
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Style the buttons */
+#controls button {
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#instructions {
+  margin-left: 20px;
+  font-size: 14px;
+  color: #555;
+}
+
+/* The SVG takes up most of the viewport */
+#canvas {
+  background: #ffffff;
+  cursor: crosshair;
+  user-select: none;
+}
+
+/* === Node styling === */
+/* Unselected circle: light blue fill, black stroke */
+.node-circle {
+  fill: #cce5ff;
+  stroke: #005cbf;
+  stroke-width: 1.5px;
+}
+
+/* Selected circle: darker stroke */
+.node-circle.selected {
+  stroke: #ff4500;
+  stroke-width: 3px;
+}
+
+/* Label rectangle: white background, black border */
+.node-label-rect {
+  fill: #ffffff;
+  stroke: #333;
+  stroke-width: 1px;
+}
+
+/* Label text */
+.node-label-text {
+  font-size: 14px;
+  fill: #000;
+}
+
+/* === Arrow marker definition === */
+.arrow-marker {
+  fill: #333;
+  stroke: none;
+}
+
+/* Line style for arrows */
+.arrow-line {
+  stroke: #333;
+  stroke-width: 1.5px;
+  marker-end: url(#arrowhead);
+}
