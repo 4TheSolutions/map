@@ -6,17 +6,16 @@ html, body {
   font-family: Arial, sans-serif;
 }
 
-/* Container for buttons/instructions */
+/* Container for the buttons + instructions */
 #controls {
   background: #f0f0f0;
-  padding: 10px;
+  padding: 8px;
   border-bottom: 1px solid #ccc;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-/* Style the buttons */
 #controls button {
   padding: 6px 12px;
   font-size: 14px;
@@ -29,30 +28,30 @@ html, body {
   color: #555;
 }
 
-/* The SVG takes up most of the viewport */
+/* The SVG canvas below takes up most of the viewport */
 #canvas {
-  background: #ffffff;
+  background: #fff;
   cursor: crosshair;
   user-select: none;
 }
 
 /* === Node styling === */
-/* Unselected circle: transparent fill, blue stroke */
+/* Transparent fill, blue stroke by default */
 .node-circle {
-  fill: transparent;         /* <-- Transparent now */
+  fill: transparent;
   stroke: #005cbf;
   stroke-width: 1.5px;
 }
 
-/* Selected circle: orange stroke, thicker */
+/* Selected node: orange stroke, thicker */
 .node-circle.selected {
   stroke: #ff4500;
   stroke-width: 3px;
 }
 
-/* Label rectangle: white background, black border */
+/* Label background: white fill, dark border */
 .node-label-rect {
-  fill: #ffffff;
+  fill: #fff;
   stroke: #333;
   stroke-width: 1px;
 }
@@ -63,13 +62,13 @@ html, body {
   fill: #000;
 }
 
-/* === Arrow marker definition === */
+/* Arrowhead marker */
 .arrow-marker {
   fill: #333;
   stroke: none;
 }
 
-/* Line style for arrows */
+/* Arrow lines */
 .arrow-line {
   stroke: #333;
   stroke-width: 1.5px;
